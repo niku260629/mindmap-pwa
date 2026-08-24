@@ -1,4 +1,4 @@
-const CACHE_NAME = "finance-mindmap-v7";
+const CACHE_NAME = "finance-mindmap-v8";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
@@ -26,7 +26,7 @@ self.addEventListener("install", (event) => {
     caches.open(CACHE_NAME).then((cache) =>
       Promise.all(
         ASSETS.map((url) =>
-          fetch(url, { redirect: "follow" })
+          fetch(url, { redirect: "follow", cache: "no-store" })
             .then(stripRedirect)
             .then((res) => cache.put(url, res))
         )
@@ -52,7 +52,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request)
+      return fetch(event.request, { cache: "no-store" })
         .then(stripRedirect)
         .then((res) => {
           const resClone = res.clone();
