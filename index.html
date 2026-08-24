@@ -1207,6 +1207,9 @@ function FinanceMindMap() {
         <button className="fmm-btn" style={{ ...styles.tabBtn, ...(page === "calendar" ? styles.tabBtnActive : {}) }} onClick={() => setPage("calendar")}>
           <IconCalendar size={14} style={{ marginRight: 6 }} />캘린더
         </button>
+        <button className="fmm-btn" style={styles.tabBtn} onClick={() => alert("테스트 버튼 동작 중 " + new Date().toLocaleString())}>
+          테스트
+        </button>
       </div>
 
       {page === "map" && settingsOpen && (
