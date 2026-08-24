@@ -45,7 +45,6 @@
 </head>
 <body>
 <div id="root"></div>
-<div id="fmm-debug" style="position:fixed;bottom:0;left:0;right:0;font:10px monospace;background:#000;color:#0f0;padding:4px 6px;z-index:99999;white-space:pre-wrap;word-break:break-all;"></div>
 
 <script>/**
  * @license React
@@ -1208,9 +1207,6 @@ function FinanceMindMap() {
         <button className="fmm-btn" style={{ ...styles.tabBtn, ...(page === "calendar" ? styles.tabBtnActive : {}) }} onClick={() => setPage("calendar")}>
           <IconCalendar size={14} style={{ marginRight: 6 }} />캘린더
         </button>
-        <button className="fmm-btn" style={styles.tabBtn} onClick={() => alert("테스트 버튼 동작 중 " + new Date().toLocaleString())}>
-          테스트
-        </button>
       </div>
 
       {page === "map" && settingsOpen && (
@@ -1741,20 +1737,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(<FinanceMindMap />);
     });
   }
 
-  (async () => {
-    const el = document.getElementById("fmm-debug");
-    const lines = [];
-    lines.push("url: " + location.href);
-    lines.push("standalone: " + (window.navigator.standalone === true));
-    lines.push("controller: " + (navigator.serviceWorker && navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : "none"));
-    try {
-      const keys = await caches.keys();
-      lines.push("caches: " + JSON.stringify(keys));
-    } catch (e) {
-      lines.push("caches: error " + e.message);
-    }
-    if (el) el.textContent = lines.join(" | ");
-  })();
 </script>
 </body>
 </html>

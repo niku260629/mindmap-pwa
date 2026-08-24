@@ -1,4 +1,4 @@
-const CACHE_NAME = "finance-mindmap-v10";
+const CACHE_NAME = "finance-mindmap-v11";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
