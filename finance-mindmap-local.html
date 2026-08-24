@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>내 계좌 & 자동이체 지도</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+  * { box-sizing: border-box; font-family: 'Noto Sans KR', -apple-system, sans-serif; }
+  html, body { margin: 0; background: #EEF1F0; }
+  .fmm-serif { font-family: 'Noto Serif KR', serif; }
+  @keyframes fmm-pop { from { transform: scale(0.7); opacity:0; } to { transform: scale(1); opacity:1; } }
+  .fmm-node { transition: left 0.35s cubic-bezier(.2,.8,.2,1), top 0.35s cubic-bezier(.2,.8,.2,1), width 0.25s ease, height 0.25s ease, box-shadow 0.15s ease; cursor: pointer; animation: fmm-pop 0.25s ease; }
+  .fmm-node:hover { filter: brightness(0.97); }
+  .fmm-btn { cursor: pointer; border: none; }
+  .fmm-btn:hover { filter: brightness(0.95); }
+  .fmm-inline-btn { cursor: pointer; border: none; background: transparent; padding: 5px; border-radius: 6px; display:flex; align-items:center; justify-content:center; }
+  .fmm-inline-btn:hover { background: rgba(27,36,48,0.06); }
+  .fmm-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
+  .fmm-scroll::-webkit-scrollbar-thumb { background: #D8DEDC; border-radius: 8px; }
+  .fmm-input { border: 1px solid #D8DEDC; border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none; background: #fff; width: 100%; }
+  .fmm-input:focus { border-color: #3556A6; }
+  .fmm-fadein { animation: fmm-fade 0.18s ease; }
+  @keyframes fmm-fade { from { opacity: 0; transform: translateY(-3px);} to { opacity: 1; transform: translateY(0);} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useLayoutEffect, useMemo, useRef } = React;
+
+/* ---------- tiny inline icon set (no external deps) ---------- */
+function Icon({ children, size = 16, color }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
+const IconPlus = (p) => <Icon {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Icon>;
+const IconX = (p) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>;
+const IconCheck = (p) => <Icon {...p}><polyline points="20 6 9 17 4 12"/></Icon>;
+const IconTrash = (p) => <Icon {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></Icon>;
+const IconRotate = (p) => <Icon {...p}><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/></Icon>;
+const IconLandmark = (p) => <Icon {...p}><polygon points="12 2 21 8 3 8"/><line x1="4" y1="21" x2="20" y2="21"/><line x1="6" y1="8" x2="6" y2="18"/><line x1="10" y1="8" x2="10" y2="18"/><line x1="14" y1="8" x2="14" y2="18"/><line x1="18" y1="8" x2="18" y2="18"/></Icon>;
+const IconWallet = (p) => <Icon {...p}><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="14.5" r="0.6" fill={p.color||"currentColor"}/></Icon>;
+const IconArrowDown = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><polyline points="8 11 12 15 16 11"/><line x1="12" y1="7" x2="12" y2="15"/></Icon>;
+const IconArrowUp = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><polyline points="16 13 12 9 8 13"/><line x1="12" y1="17" x2="12" y2="9"/></Icon>;
+const IconAlert = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></Icon>;
+const IconDownload = (p) => <Icon {...p}><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><line x1="4" y1="21" x2="20" y2="21"/></Icon>;
+const IconUpload = (p) => <Icon {...p}><path d="M12 21V9"/><polyline points="7 14 12 9 17 14"/><line x1="4" y1="3" x2="20" y2="3"/></Icon>;
+
+/* ---------- data / layout helpers ---------- */
+const BANK_COLORS = ["#2F6F63", "#3556A6", "#B5542A", "#7A4FA0", "#B08900", "#C1436B"];
+const STORAGE_KEY = "finance-mindmap:banks";
+let idSeq = 0;
+const genId = (prefix) => { idSeq += 1; return `${prefix}-${Date.now().toString(36)}-${idSeq}`; };
+const formatWon = (n) => `${Number(n || 0).toLocaleString("ko-KR")}원`;
+
+function loadBanks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) return parsed; }
+  } catch (e) {}
+  return [];
+}
+
+function ellipseSize(label, type) {
+  const ry = type === "root" ? 56 : type === "bank" ? 34 : type === "account" ? 28 : 27;
+  const charW = type === "bank" ? 7.4 : type === "account" ? 7 : 6.6;
+  const shown = (label || "").slice(0, 9);
+  const textW = shown.length * charW + 26;
+  const rx = type === "root" ? 56 : Math.max(ry + 6, textW / 2);
+  return { rx, ry };
+}
+
+function computeLayout(banks) {
+  const nodes = [];
+  const edges = [];
+  if (banks.length === 0) {
+    return { nodes: [{ id: "root", type: "root", x: 260, y: 210, ...ellipseSize("내 자산", "root"), label: "내 자산" }], edges, w: 520, h: 420 };
+  }
+  const leafWeight = (acc) => Math.max(1, acc.transfers.length);
+  const accWeight = (bank) => bank.accounts.reduce((s, a) => s + leafWeight(a), 0) || 1;
+  const totalWeight = banks.reduce((s, b) => s + accWeight(b), 0) || 1;
+  const bankCount = banks.length;
+  const accountCount = banks.reduce((s, b) => s + b.accounts.length, 0);
+  const transferCount = banks.reduce((s, b) => s + b.accounts.reduce((s2, a) => s2 + a.transfers.length, 0), 0);
+  const r1 = 175 + Math.min(bankCount, 10) * 6;
+  const r2 = r1 + 145 + Math.min(accountCount, 20) * 5;
+  const r3 = r2 + 140 + Math.min(transferCount, 30) * 5;
+  const half = r3 + 110;
+  const cx = half, cy = half;
+  nodes.push({ id: "root", type: "root", x: cx, y: cy, ...ellipseSize("내 자산", "root"), label: "내 자산" });
+  let cursor = -Math.PI / 2;
+  banks.forEach((bank) => {
+    const w = accWeight(bank);
+    const span = (w / totalWeight) * Math.PI * 2;
+    const angle = cursor + span / 2;
+    cursor += span;
+    const bx = cx + r1 * Math.cos(angle), by = cy + r1 * Math.sin(angle);
+    nodes.push({ id: bank.id, type: "bank", x: bx, y: by, angle, color: bank.color, label: bank.name, ...ellipseSize(bank.name, "bank") });
+    edges.push({ from: "root", to: bank.id, color: bank.color });
+    const accTotalW = accWeight(bank);
+    let accCursor = angle - span / 2;
+    bank.accounts.forEach((acc) => {
+      const aw = leafWeight(acc);
+      const aspan = (aw / accTotalW) * span;
+      const aangle = accCursor + aspan / 2;
+      accCursor += aspan;
+      const ax = cx + r2 * Math.cos(aangle), ay = cy + r2 * Math.sin(aangle);
+      nodes.push({ id: acc.id, type: "account", x: ax, y: ay, angle: aangle, color: bank.color, label: acc.name, last4: acc.last4, ...ellipseSize(acc.name, "account") });
+      edges.push({ from: bank.id, to: acc.id, color: bank.color });
+      const tCount = acc.transfers.length || 1;
+      let tCursor = aangle - aspan / 2;
+      acc.transfers.forEach((tr) => {
+        const tspan = aspan / tCount;
+        const tangle = tCursor + tspan / 2;
+        tCursor += tspan;
+        const tx = cx + r3 * Math.cos(tangle), ty = cy + r3 * Math.sin(tangle);
+        nodes.push({ id: tr.id, type: "transfer", x: tx, y: ty, angle: tangle, color: bank.color, label: tr.name, amount: tr.amount, day: tr.day, direction: tr.direction, ...ellipseSize(tr.name, "transfer") });
+        edges.push({ from: acc.id, to: tr.id, color: bank.color });
+      });
+    });
+  });
+  return { nodes, edges, w: half * 2, h: half * 2 };
+}
+
+function arm(setFn) { setFn(true); setTimeout(() => setFn(false), 3000); }
+
+/* ---------- main app ---------- */
+function FinanceMindMap() {
+  const [banks, setBanks] = useState(() => loadBanks());
+  const [error, setError] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [formName, setFormName] = useState("");
+  const [formExtra, setFormExtra] = useState("");
+  const [formAmount, setFormAmount] = useState("");
+  const [formDay, setFormDay] = useState("");
+  const [formDirection, setFormDirection] = useState("out");
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [resetArmed, setResetArmed] = useState(false);
+
+  const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(banks));
+    } catch (e) {
+      setError("저장에 실패했어요. 브라우저 저장 공간을 확인해주세요.");
+    }
+  }, [banks]);
+
+  const layout = useMemo(() => computeLayout(banks), [banks]);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = Math.max(0, layout.w / 2 - el.clientWidth / 2);
+    el.scrollTop = Math.max(0, layout.h / 2 - el.clientHeight / 2);
+  }, [layout.w, layout.h]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const exists = layout.nodes.some((n) => n.id === selected.id);
+    if (!exists) setSelected(null);
+  }, [layout, selected]);
+
+  const resetForm = () => {
+    setAddOpen(false); setFormName(""); setFormExtra(""); setFormAmount(""); setFormDay(""); setFormDirection("out"); setError(null);
+  };
+  const selectNode = (n) => { setSelected({ id: n.id, type: n.type }); setAddOpen(false); setDeleteArmed(false); };
+
+  const addBank = () => {
+    if (!formName.trim()) return;
+    const color = BANK_COLORS[banks.length % BANK_COLORS.length];
+    const b = { id: genId("b"), name: formName.trim(), color, accounts: [] };
+    setBanks((prev) => [...prev, b]);
+    resetForm(); setSelected({ id: b.id, type: "bank" });
+  };
+  const addAccount = (bankId) => {
+    if (!formName.trim()) return;
+    const accId = genId("a");
+    setBanks((prev) => prev.map((b) => b.id === bankId ? { ...b, accounts: [...b.accounts, { id: accId, name: formName.trim(), last4: formExtra.trim(), transfers: [] }] } : b));
+    resetForm(); setSelected({ id: accId, type: "account" });
+  };
+  const addTransfer = (bankId, accountId) => {
+    const amt = Number(formAmount), day = Number(formDay);
+    if (!formName.trim() || !amt || amt <= 0 || !day || day < 1 || day > 31) { setError("이체명, 금액, 이체일(1~31)을 확인해주세요."); return; }
+    const trId = genId("t");
+    setBanks((prev) => prev.map((b) => b.id === bankId ? { ...b, accounts: b.accounts.map((a) => a.id === accountId ? { ...a, transfers: [...a.transfers, { id: trId, name: formName.trim(), amount: amt, day, direction: formDirection }] } : a) } : b));
+    resetForm(); setSelected({ id: trId, type: "transfer" });
+  };
+  const deleteBank = (id) => { setBanks((prev) => prev.filter((b) => b.id !== id)); setSelected(null); };
+  const deleteAccount = (bankId, accId) => { setBanks((prev) => prev.map((b) => b.id === bankId ? { ...b, accounts: b.accounts.filter((a) => a.id !== accId) } : b)); setSelected(null); };
+  const deleteTransfer = (bankId, accId, trId) => { setBanks((prev) => prev.map((b) => b.id === bankId ? { ...b, accounts: b.accounts.map((a) => a.id === accId ? { ...a, transfers: a.transfers.filter((t) => t.id !== trId) } : a) } : b)); setSelected(null); };
+
+  const exportData = () => {
+    try {
+      const blob = new Blob([JSON.stringify(banks, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const today = new Date().toISOString().slice(0, 10);
+      a.href = url; a.download = `finance-mindmap-backup-${today}.json`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { setError("내보내기에 실패했어요."); }
+  };
+  const importData = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!Array.isArray(parsed)) throw new Error("bad format");
+        setBanks(parsed); setSelected(null); setError(null);
+      } catch (err) { setError("파일을 읽지 못했어요. 올바른 백업 파일인지 확인해주세요."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  let selBank = null, selAccount = null, selTransfer = null;
+  if (selected) {
+    for (const b of banks) {
+      if (b.id === selected.id) selBank = b;
+      for (const a of b.accounts) {
+        if (a.id === selected.id) { selAccount = a; selBank = b; }
+        for (const t of a.transfers) { if (t.id === selected.id) { selTransfer = t; selAccount = a; selBank = b; } }
+      }
+    }
+  }
+
+  const flatTransfers = banks.flatMap((b) => b.accounts.flatMap((a) => a.transfers));
+  const totalOut = flatTransfers.filter((t) => t.direction === "out").reduce((s, t) => s + t.amount, 0);
+  const totalIn = flatTransfers.filter((t) => t.direction === "in").reduce((s, t) => s + t.amount, 0);
+  const accountCount = banks.reduce((s, b) => s + b.accounts.length, 0);
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div>
+          <div style={styles.eyebrow}>PERSONAL FINANCE MAP · 오프라인 로컬 버전</div>
+          <h1 className="fmm-serif" style={styles.title}>내 계좌 &amp; 자동이체 지도</h1>
+          <p style={styles.subtitle}>이 브라우저 안에만 저장돼요. 노드를 눌러 추가·삭제하세요.</p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="fmm-btn" style={styles.resetBtn} onClick={exportData}><IconDownload size={13} style={{ marginRight: 6 }} />내보내기</button>
+          <button className="fmm-btn" style={styles.resetBtn} onClick={() => fileInputRef.current && fileInputRef.current.click()}><IconUpload size={13} style={{ marginRight: 6 }} />가져오기</button>
+          <input type="file" accept="application/json" ref={fileInputRef} style={{ display: "none" }} onChange={importData} />
+          <button
+            className="fmm-btn"
+            onClick={() => { if (resetArmed) { setBanks([]); setSelected(null); setResetArmed(false); } else { arm(setResetArmed); } }}
+            style={{ ...styles.resetBtn, ...(resetArmed ? styles.resetBtnArmed : {}) }}
+          >
+            <IconRotate size={13} style={{ marginRight: 6 }} />{resetArmed ? "다시 클릭하면 전체 삭제" : "전체 초기화"}
+          </button>
+        </div>
+      </div>
+
+      <div style={styles.statsRow}>
+        <div style={styles.statChip}><span style={styles.statLabel}>은행</span><span style={styles.statValue}>{banks.length}곳</span></div>
+        <div style={styles.statChip}><span style={styles.statLabel}>계좌</span><span style={styles.statValue}>{accountCount}개</span></div>
+        <div style={styles.statChip}><span style={styles.statLabel}>자동이체</span><span style={styles.statValue}>{flatTransfers.length}건</span></div>
+        <div style={{ ...styles.statChip, borderColor: "#C1436B22" }}><span style={styles.statLabel}>월 예상 출금</span><span style={{ ...styles.statValue, color: "#B5542A" }}>{formatWon(totalOut)}</span></div>
+        <div style={{ ...styles.statChip, borderColor: "#2F6F6322" }}><span style={styles.statLabel}>월 예상 입금</span><span style={{ ...styles.statValue, color: "#2F6F63" }}>{formatWon(totalIn)}</span></div>
+      </div>
+
+      {error && <div style={styles.errorBar}><IconAlert size={14} style={{ marginRight: 6 }} />{error}</div>}
+
+      <div ref={scrollRef} className="fmm-scroll" style={styles.canvas} onClick={() => setSelected(null)}>
+        <div style={{ position: "relative", width: layout.w, height: layout.h }}>
+          <svg width={layout.w} height={layout.h} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}>
+            {layout.edges.map((e) => {
+              const from = layout.nodes.find((n) => n.id === e.from);
+              const to = layout.nodes.find((n) => n.id === e.to);
+              if (!from || !to) return null;
+              return <line key={`${e.from}__${e.to}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={e.color} strokeWidth={2} strokeOpacity={0.5} strokeLinecap="round" />;
+            })}
+          </svg>
+          {layout.nodes.map((n) => {
+            const isSelected = selected && selected.id === n.id;
+            const w = n.rx * 2, h = n.ry * 2;
+            const bg = n.type === "root" ? "#1B2430" : "#fff";
+            const border = n.type === "root" ? "none" : `2px solid ${n.color}`;
+            const textColor = n.type === "root" ? "#fff" : "#1B2430";
+            return (
+              <div
+                key={n.id}
+                className="fmm-node"
+                onClick={(e) => { e.stopPropagation(); selectNode(n); }}
+                style={{ position: "absolute", left: n.x - n.rx, top: n.y - n.ry, width: w, height: h, borderRadius: "50%", background: bg, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: isSelected ? `0 0 0 3px #fff, 0 0 0 6px ${n.color || "#1B2430"}` : "0 1px 4px rgba(27,36,48,0.10)", padding: "0 8px", textAlign: "center" }}
+                title={n.type === "transfer" ? `${n.label} · ${formatWon(n.amount)} · 매월 ${n.day}일` : n.label}
+              >
+                {n.type === "transfer" && <span style={{ position: "absolute", top: 2, right: 8, width: 8, height: 8, borderRadius: "50%", background: n.direction === "out" ? "#B5542A" : "#2F6F63" }} />}
+                <span className={n.type === "root" ? "fmm-serif" : ""} style={{ fontSize: n.type === "root" ? 16 : n.type === "bank" ? 12.5 : 11.5, fontWeight: n.type === "root" ? 700 : 600, color: textColor, maxWidth: w - 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.label}</span>
+                {n.type === "transfer" && <span style={{ fontSize: 9.5, color: "#9AA3AC", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{formatWon(n.amount)}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {selected && (
+        <div className="fmm-fadein" style={styles.panel} onClick={(e) => e.stopPropagation()}>
+          {selected.type === "root" && (
+            <PanelBody icon={<IconLandmark size={16} color="#1B2430" />} title="내 자산" subtitle="은행을 추가해서 지도를 시작하세요" onClose={() => setSelected(null)}>
+              {!addOpen ? (
+                <button className="fmm-btn" style={styles.panelAddBtn} onClick={() => setAddOpen(true)}><IconPlus size={13} style={{ marginRight: 6 }} />은행 추가</button>
+              ) : (
+                <InlineForm onCancel={resetForm} onSave={addBank} fields={[{ value: formName, set: setFormName, placeholder: "은행 이름 (예: 국민은행)", autoFocus: true }]} />
+              )}
+            </PanelBody>
+          )}
+          {selected.type === "bank" && selBank && (
+            <PanelBody icon={<IconLandmark size={16} color={selBank.color} />} title={selBank.name} subtitle={`계좌 ${selBank.accounts.length}개`} onClose={() => setSelected(null)} onDelete={() => (deleteArmed ? deleteBank(selBank.id) : arm(setDeleteArmed))} deleteArmed={deleteArmed}>
+              {!addOpen ? (
+                <button className="fmm-btn" style={{ ...styles.panelAddBtn, color: selBank.color, borderColor: selBank.color }} onClick={() => setAddOpen(true)}><IconPlus size={13} style={{ marginRight: 6 }} />계좌 추가</button>
+              ) : (
+                <InlineForm onCancel={resetForm} onSave={() => addAccount(selBank.id)} fields={[{ value: formName, set: setFormName, placeholder: "계좌 별칭 (예: 월급통장)", autoFocus: true }, { value: formExtra, set: setFormExtra, placeholder: "계좌 뒷 4자리 (선택)" }]} />
+              )}
+            </PanelBody>
+          )}
+          {selected.type === "account" && selAccount && (
+            <PanelBody icon={<IconWallet size={16} color={selBank.color} />} title={selAccount.name} subtitle={selAccount.last4 ? `${selBank.name} · •••• ${selAccount.last4}` : selBank.name} onClose={() => setSelected(null)} onDelete={() => (deleteArmed ? deleteAccount(selBank.id, selAccount.id) : arm(setDeleteArmed))} deleteArmed={deleteArmed}>
+              {!addOpen ? (
+                <button className="fmm-btn" style={{ ...styles.panelAddBtn, color: selBank.color, borderColor: selBank.color }} onClick={() => setAddOpen(true)}><IconPlus size={13} style={{ marginRight: 6 }} />자동이체 추가</button>
+              ) : (
+                <InlineForm onCancel={resetForm} onSave={() => addTransfer(selBank.id, selAccount.id)} fields={[{ value: formName, set: setFormName, placeholder: "용도 (예: 넷플릭스, 관리비)", autoFocus: true }, { value: formAmount, set: setFormAmount, placeholder: "금액", type: "number" }, { value: formDay, set: setFormDay, placeholder: "매월 이체일 (1~31)", type: "number" }]} direction={{ value: formDirection, set: setFormDirection }} />
+              )}
+            </PanelBody>
+          )}
+          {selected.type === "transfer" && selTransfer && (
+            <PanelBody icon={selTransfer.direction === "out" ? <IconArrowDown size={16} color="#B5542A" /> : <IconArrowUp size={16} color="#2F6F63" />} title={selTransfer.name} subtitle={`${selAccount.name} · ${selBank.name}`} onClose={() => setSelected(null)} onDelete={() => (deleteArmed ? deleteTransfer(selBank.id, selAccount.id, selTransfer.id) : arm(setDeleteArmed))} deleteArmed={deleteArmed}>
+              <div style={styles.detailRow}><span style={styles.detailLabel}>금액</span><span style={styles.detailValue}>{formatWon(selTransfer.amount)}</span></div>
+              <div style={styles.detailRow}><span style={styles.detailLabel}>이체일</span><span style={styles.detailValue}>매월 {selTransfer.day}일</span></div>
+              <div style={styles.detailRow}><span style={styles.detailLabel}>구분</span><span style={{ ...styles.detailValue, color: selTransfer.direction === "out" ? "#B5542A" : "#2F6F63" }}>{selTransfer.direction === "out" ? "출금" : "입금"}</span></div>
+            </PanelBody>
+          )}
+        </div>
+      )}
+
+      {!selected && (
+        <button className="fmm-btn" style={styles.floatingAddBtn} onClick={() => setSelected({ id: "root", type: "root" })}><IconPlus size={14} style={{ marginRight: 6 }} />은행 추가</button>
+      )}
+
+      <p style={styles.footnote}>이 파일은 인터넷 서버와 통신하지 않아요. 모든 데이터는 지금 이 브라우저(이 컴퓨터)에만 저장되며, 백업하려면 위 "내보내기" 버튼으로 파일을 저장해두세요.</p>
+    </div>
+  );
+}
+
+function PanelBody({ icon, title, subtitle, onClose, onDelete, deleteArmed, children }) {
+  return (
+    <div>
+      <div style={styles.panelHeader}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {icon}
+          <div style={{ minWidth: 0 }}>
+            <div style={styles.panelTitle}>{title}</div>
+            <div style={styles.panelSubtitle}>{subtitle}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          {onDelete && <button className="fmm-inline-btn" onClick={onDelete} style={{ color: deleteArmed ? "#C1436B" : "#9AA3AC", background: deleteArmed ? "#FDECEA" : "transparent" }} title={deleteArmed ? "다시 누르면 삭제" : "삭제"}><IconTrash size={15} /></button>}
+          <button className="fmm-inline-btn" onClick={onClose} style={{ color: "#9AA3AC" }} title="닫기"><IconX size={16} /></button>
+        </div>
+      </div>
+      <div style={{ marginTop: 10 }}>{children}</div>
+    </div>
+  );
+}
+
+function InlineForm({ fields, onSave, onCancel, direction }) {
+  const handleKey = (e) => { if (e.key === "Enter") onSave(); if (e.key === "Escape") onCancel(); };
+  return (
+    <div className="fmm-fadein">
+      {fields.map((f, i) => (
+        <input key={i} className="fmm-input" style={{ marginBottom: 6 }} type={f.type || "text"} value={f.value} placeholder={f.placeholder} autoFocus={!!f.autoFocus} onChange={(e) => f.set(e.target.value)} onKeyDown={handleKey} />
+      ))}
+      {direction && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          <button className="fmm-btn" style={{ ...styles.dirBtn, ...(direction.value === "out" ? styles.dirBtnActiveOut : {}) }} onClick={() => direction.set("out")}>출금</button>
+          <button className="fmm-btn" style={{ ...styles.dirBtn, ...(direction.value === "in" ? styles.dirBtnActiveIn : {}) }} onClick={() => direction.set("in")}>입금</button>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+        <button className="fmm-inline-btn" onClick={onCancel} title="취소" style={{ color: "#9AA3AC" }}><IconX size={16} /></button>
+        <button className="fmm-inline-btn" onClick={onSave} title="저장" style={{ color: "#2F6F63" }}><IconCheck size={16} /></button>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  page: { background: "#EEF1F0", minHeight: "100vh", padding: "28px 24px 20px", color: "#1B2430", position: "relative" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 },
+  eyebrow: { fontSize: 11, letterSpacing: "0.14em", color: "#5C6672", fontWeight: 700, marginBottom: 4 },
+  title: { fontSize: 26, fontWeight: 700, margin: 0, color: "#1B2430" },
+  subtitle: { fontSize: 13, color: "#5C6672", margin: "6px 0 0" },
+  resetBtn: { display: "flex", alignItems: "center", background: "#fff", color: "#5C6672", border: "1px solid #D8DEDC", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" },
+  resetBtnArmed: { background: "#C1436B", color: "#fff", borderColor: "#C1436B" },
+  statsRow: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 },
+  statChip: { background: "#fff", border: "1px solid #D8DEDC", borderRadius: 10, padding: "8px 14px", display: "flex", flexDirection: "column", minWidth: 90 },
+  statLabel: { fontSize: 10.5, color: "#9AA3AC", fontWeight: 500 },
+  statValue: { fontSize: 15, fontWeight: 700, marginTop: 2, color: "#1B2430" },
+  errorBar: { display: "flex", alignItems: "center", background: "#FDECEA", color: "#B5542A", fontSize: 12.5, padding: "8px 12px", borderRadius: 8, marginBottom: 12 },
+  canvas: { position: "relative", overflow: "auto", background: "#F5F7F6", border: "1px solid #D8DEDC", borderRadius: 16, minHeight: 460, maxHeight: "62vh" },
+  panel: { marginTop: 14, background: "#fff", border: "1px solid #D8DEDC", borderRadius: 14, padding: 14, maxWidth: 340 },
+  panelHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  panelTitle: { fontSize: 14.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  panelSubtitle: { fontSize: 11.5, color: "#9AA3AC", marginTop: 2 },
+  panelAddBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", background: "#fff", border: "1.5px dashed #D8DEDC", borderRadius: 10, padding: "9px 12px", fontSize: 12.5, fontWeight: 600, color: "#3556A6" },
+  floatingAddBtn: { display: "flex", alignItems: "center", background: "#1B2430", color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 12.5, fontWeight: 600, marginTop: 14 },
+  detailRow: { display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #F0F2F1", fontSize: 12.5 },
+  detailLabel: { color: "#9AA3AC" },
+  detailValue: { fontWeight: 600, fontVariantNumeric: "tabular-nums" },
+  dirBtn: { flex: 1, padding: "6px 0", borderRadius: 6, background: "#fff", border: "1px solid #D8DEDC", fontSize: 11.5, fontWeight: 600, color: "#9AA3AC" },
+  dirBtnActiveOut: { background: "#FDECEA", color: "#B5542A", borderColor: "#B5542A" },
+  dirBtnActiveIn: { background: "#EAF3F1", color: "#2F6F63", borderColor: "#2F6F63" },
+  footnote: { fontSize: 11, color: "#9AA3AC", marginTop: 12, textAlign: "center" },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<FinanceMindMap />);
+</script>
+</body>
+</html>
